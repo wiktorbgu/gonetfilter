@@ -77,3 +77,38 @@ For each command, record:
 - binary architecture and file size.
 
 Do not report a feature as supported on a router family until it has passed runtime testing on the relevant kernel build.
+
+## nftables readback comparison (tested ruleset)
+
+For the current supported transparent-proxy readback path, compare the output
+of the reference `nft` binary with GoNetFilter against the same kernel ruleset:
+
+```sh
+nft list ruleset
+./nft list ruleset
+```
+
+The regression set used during development covers:
+
+- `ip nat` postrouting with `meta oiftype ether`, IPv4 destination exclusions
+  (`127.0.0.0/8`, `169.254.0.0/16`, `224.0.0.0/4`, and
+  `255.255.255.255`) and `masquerade`;
+- an `inet` divert chain with `meta l4proto tcp`, `socket transparent 1`,
+  `meta mark set 0x00000123` and `accept`;
+- an `inet` prerouting chain with FIB address types (`local`, `broadcast`,
+  `multicast`), TCP MPTCP option match, grouped TCP/UDP protocol lookup, and
+  IPv4/IPv6 TPROXY destinations.
+
+For this exact test ruleset, GoNetFilter's rendered output was compared with
+and matched the reference nft output on the tested Alpine container/kernel.
+This is a focused compatibility result, not a claim that every nftables
+expression, set datatype, kernel release or nft CLI syntax is supported.
+
+When repeating the test, capture both outputs and verify at least:
+
+- `meta oiftype ether` (not an unknown value or raw compare);
+- the four IPv4 exclusions, with the host address rendered without `/32`;
+- mark `0x00000123` without byte swapping;
+- FIB labels in canonical order;
+- `socket transparent 1`;
+- TPROXY family, address, port and verdict for both IPv4 and IPv6.

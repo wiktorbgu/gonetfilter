@@ -4,6 +4,7 @@ GO ?= go
 
 test:
 	$(GO) test ./...
+	cd third_party/nftables && $(GO) test ./expr
 
 build:
 	./scripts/build.sh all all

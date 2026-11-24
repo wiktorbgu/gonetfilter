@@ -1,0 +1,6 @@
+dist/
+bin/
+.git/
+.idea/
+.vscode/
+*.zip
