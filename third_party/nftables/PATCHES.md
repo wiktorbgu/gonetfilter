@@ -1,3 +1,5 @@
+[English](PATCHES.md) | [Русский](PATCHES.ru.md)
+
 # Local patches
 
 This directory is based on **github.com/google/nftables v0.3.0**.

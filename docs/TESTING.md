@@ -1,5 +1,7 @@
 # Device test checklist
 
+[English](TESTING.md) | [Русский](TESTING.ru.md)
+
 This is a checklist for validating GoNetFilter on MikroTik RouterOS containers and other Linux router containers. The kernel and container configuration are part of the test environment; successful compilation alone does not prove runtime compatibility.
 
 ## Before testing
@@ -15,14 +17,42 @@ Record:
 
 Do not assume that a userspace architecture or kernel version implies a particular Netfilter feature set.
 
-## Legacy iptables test
+## IPv4 and IPv6 legacy iptables tests
+
+Run listing/readback checks for every implemented legacy table on both address families. These commands are read-only:
+
+```sh
+./iptables -t filter -L -n -v --line-numbers
+./iptables -t nat -L -n -v --line-numbers
+./iptables -t mangle -L -n -v --line-numbers
+./iptables -t raw -L -n -v --line-numbers
+./iptables -t filter -S
+./iptables -t nat -S
+./iptables -t mangle -S
+./iptables -t raw -S
+
+./ip6tables -t filter -L -n -v --line-numbers
+./ip6tables -t nat -L -n -v --line-numbers
+./ip6tables -t mangle -L -n -v --line-numbers
+./ip6tables -t raw -L -n -v --line-numbers
+./ip6tables -t filter -S
+./ip6tables -t nat -S
+./ip6tables -t mangle -S
+./ip6tables -t raw -S
+```
+
+For the supported rule forms, compare GoNetFilter output with the system legacy tools against the same kernel state. `iptables` and `ip6tables` are separate IPv4/IPv6 implementations; check both independently. The following examples modify the active firewall and must only be run in a disposable test environment or a safe maintenance window.
 
 Use only on a test router/container or during a safe maintenance window. Confirm that the legacy tables and extensions required by the test rules are available.
 
 ```sh
 ./iptables --version
-./iptables -t nat -L -n -v
-./iptables -t mangle -L -n -v
+./iptables -L -v -n --line-numbers
+./iptables -t nat -L -n -v --line-numbers
+./iptables -t mangle -L -n -v --line-numbers
+./iptables -t raw -L -n -v --line-numbers
+./ip6tables -L -n -v --line-numbers
+./ip6tables -t nat -L -n -v --line-numbers
 
 ./iptables -t nat -A PREROUTING -i br-lan -p tcp -j REDIRECT --to-port 4080
 ./iptables -t nat -A POSTROUTING -j MASQUERADE
@@ -31,11 +61,56 @@ Use only on a test router/container or during a safe maintenance window. Confirm
 
 ./iptables -t nat -S
 ./iptables -t mangle -S
+./iptables -t raw -S
 ```
 
 Replace `br-lan` and the ports/mark with the intended test values. The normal system iptables command may be used as an independent inspection oracle if present; GoNetFilter itself does not invoke it.
 
+### Mihomo redirect compatibility smoke test
+
+Run this only in a disposable test container because it modifies the active IPv4 firewall:
+
+```sh
+iptables -t nat -N mihomo-output
+iptables -t nat -I OUTPUT -j mihomo-output
+iptables -t nat -A OUTPUT -p tcp -j mihomo-output
+iptables -t nat -A mihomo-output -o Meta -p tcp -j REDIRECT --to-ports 33643
+iptables -t nat -N mihomo-prerouting
+iptables -t nat -A PREROUTING -j mihomo-prerouting
+iptables -t nat -A mihomo-prerouting -p udp -m udp --dport 53 -j DNAT --to 198.19.0.2
+iptables -t nat -A mihomo-prerouting -m addrtype --dst-type LOCAL -j RETURN
+iptables -t nat -A mihomo-prerouting -p tcp -j REDIRECT --to-ports 33643
+iptables -t filter -N mihomo-input
+iptables -t filter -A INPUT -i Meta -j mihomo-input
+iptables -t filter -A mihomo-input -i Meta -j ACCEPT
+iptables -t nat -L -n -v
+iptables -t nat -S
+iptables -t filter -L -n -v
+```
+
+The `-I` smoke test verifies insertion at position 1 (the default) ahead of existing OUTPUT rules. An explicit rule number can also be supplied, for example `-I OUTPUT 2 ...`. The default `iptables -L` invocation lists the `filter` table. For ABI/readback diagnostics, run `./iptables --debug-dump nat`; this prints entry offsets and raw match/target bytes to help investigate compatibility with rules installed by other iptables implementations.
+
+The IPv4 and IPv6 backends are separate and use their respective x_tables ABIs. On a target kernel, compare both `iptables -t nat -L -n -v` and `ip6tables -t nat -L -n -v` against the system legacy tools, then exercise the supported Mihomo rule operations in a disposable container. The IPv6 ABI/readback path has unit coverage but still needs runtime verification on the target ARM32 kernel.
+
 Important: legacy table updates use a read/modify/replace operation. Do not run multiple writers concurrently while testing. Verify that existing rules and counters remain correct after each insertion.
+
+## iptables readback comparison
+
+After installing representative test rules through GoNetFilter, capture the same tables with the system legacy utilities (if available) and with GoNetFilter. Example:
+
+```sh
+iptables -t nat -L -n -v --line-numbers
+./iptables -t nat -L -n -v --line-numbers
+iptables -t nat -S
+./iptables -t nat -S
+
+ip6tables -t nat -L -n -v --line-numbers
+./ip6tables -t nat -L -n -v --line-numbers
+ip6tables -t nat -S
+./ip6tables -t nat -S
+```
+
+Repeat for `filter`, `mangle` and `raw`, and for every table available on the target kernel. Compare chain order, rule order, match/target arguments, counters where meaningful, and preservation of pre-existing rules. If the system legacy utility is unavailable, save GoNetFilter output and verify kernel state using another independent inspection method available on the device.
 
 ## nftables test
 

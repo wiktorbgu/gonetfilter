@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7
 FROM golang:1.27-alpine AS build
+ARG VERSION=
 WORKDIR /src
 RUN apk add --no-cache ca-certificates upx
 COPY . .
@@ -8,18 +9,23 @@ RUN go mod tidy && go mod download
 RUN set -eux; \
     (cd third_party/nftables && go test ./expr); \
     go test ./...; \
-    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o /tmp/gonetfilter ./cmd/gonetfilter; \
-    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o /tmp/iptables ./cmd/iptables; \
-    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o /tmp/nft ./cmd/nft
+    ldflags="-s -w -buildid="; \
+    if [ -n "$VERSION" ]; then ldflags="$ldflags -X main.version=$VERSION"; fi; \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$ldflags" -o /tmp/gonetfilter ./cmd/gonetfilter; \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o /tmp/iptables ./cmd/iptables; \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o /tmp/ip6tables ./cmd/ip6tables; \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o /tmp/nft ./cmd/nft
 RUN set -eux; \
+    ldflags="-s -w -buildid="; \
+    if [ -n "$VERSION" ]; then ldflags="$ldflags -X main.version=$VERSION"; fi; \
     mkdir -p /out; \
     for spec in 'amd64:' 'arm64:' 'armv5:5' 'armv7:7'; do \
       name="${spec%%:*}"; arm="${spec#*:}"; \
       case "$name" in amd64) arch=amd64;; arm64) arch=arm64;; *) arch=arm;; esac; \
       if [ -n "$arm" ]; then \
-        CGO_ENABLED=0 GOOS=linux GOARCH="$arch" GOARM="$arm" go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o "/out/gonetfilter-$name" ./cmd/gonetfilter; \
+        CGO_ENABLED=0 GOOS=linux GOARCH="$arch" GOARM="$arm" go build -trimpath -buildvcs=false -ldflags="$ldflags" -o "/out/gonetfilter-$name" ./cmd/gonetfilter; \
       else \
-        CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o "/out/gonetfilter-$name" ./cmd/gonetfilter; \
+        CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -buildvcs=false -ldflags="$ldflags" -o "/out/gonetfilter-$name" ./cmd/gonetfilter; \
       fi; \
       upx --best --lzma "/out/gonetfilter-$name"; \
       upx -t "/out/gonetfilter-$name"; \

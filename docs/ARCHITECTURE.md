@@ -1,18 +1,21 @@
 # Architecture
 
+[English](ARCHITECTURE.md) | [Русский](ARCHITECTURE.ru.md)
+
 - `internal/iptables`: compact IPv4 iptables-legacy implementation using
-  `getsockopt`/`setsockopt` and the Linux x_tables ABI.
+  `AF_INET` x_tables ABI calls.
+- `internal/ip6tables`: separate IPv6 ip6tables-legacy implementation using
+  `AF_INET6` / `SOL_IPV6` and the IPv6-specific `ip6t_entry` ABI.
 - `internal/nft`: compact nftables implementation using `NETLINK_NETFILTER`
   through `github.com/google/nftables`.
-- `cmd/iptables` and `cmd/nft`: thin standalone command entry points.
+- `cmd/iptables`, `cmd/ip6tables` and `cmd/nft`: thin standalone command entry points.
 - `cmd/gonetfilter`: BusyBox-style combined dispatcher.
 - `third_party/nftables`: local replacement for
   `github.com/google/nftables v0.3.0`, carrying the decoder patch documented
   in `third_party/nftables/PATCHES.md`.
 
 The combined binary dispatches by executable name (`argv[0]`): `iptables`,
-`iptables-legacy`, `nft`, or `nftables`. Invoked as `gonetfilter`, it accepts
-an explicit `iptables` or `nft` subcommand.
+`iptables-legacy`, `ip6tables`, `ip6tables-legacy`, `nft`, or `nftables`. Invoked as `gonetfilter`, it accepts an explicit `iptables`, `ip6tables` or `nft` subcommand.
 
 The combined binary shares one Go runtime. Symlinks do not duplicate the
 executable on disk. The combined binary contains both frontend implementations

@@ -32,8 +32,8 @@ func Main(args []string) int {
 		args = splitCommand(args[0])
 	}
 	if len(args) < 1 {
-		printUsage(os.Stderr)
-		return 1
+		printBanner(os.Stdout)
+		return 0
 	}
 	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		printUsage(os.Stdout)
@@ -72,19 +72,28 @@ func Main(args []string) int {
 	return 0
 }
 
-// printUsage keeps the compact frontend's own identity and documents the
-// supported command subset instead of imitating the full upstream nft CLI.
+// printBanner keeps the no-argument output compact, like the iptables frontends.
+func printBanner(w *os.File) {
+	fmt.Fprintln(w, "nft: compact nftables subset")
+	fmt.Fprintln(w, "Supported: add table/chain/rule, list ruleset ... OR nft list ruleset")
+}
+
+// printUsage documents the supported subset and practical command examples.
 func printUsage(w *os.File) {
-	fmt.Fprintln(w, "tiny-nft — GoNetFilter's lightweight nftables frontend")
-	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "nft: compact nftables subset for GoNetFilter")
+	fmt.Fprintln(w, "This is a limited frontend, not a full nft(8) replacement.")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Supported commands:")
 	fmt.Fprintln(w, "  nft add table FAMILY TABLE")
 	fmt.Fprintln(w, "  nft add chain FAMILY TABLE CHAIN '{ type TYPE hook HOOK priority PRIORITY; policy POLICY; }'")
 	fmt.Fprintln(w, "  nft add rule FAMILY TABLE CHAIN EXPRESSION...")
 	fmt.Fprintln(w, "  nft list ruleset")
-	fmt.Fprintln(w, "  nft --help")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Supported frontend: tiny-nft by GoNetFilter")
-	fmt.Fprintln(w, "This is a compact command subset, not a full nft(8) replacement.")
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintln(w, "  nft list ruleset")
+	fmt.Fprintln(w, "  nft add table inet filter")
+	fmt.Fprintln(w, "  nft add chain inet filter input '{ type filter hook input priority 0; policy accept; }'")
+	fmt.Fprintln(w, "  nft add rule inet filter input counter accept")
 }
 
 // listRuleset reads the current ruleset from the kernel using Netlink.
